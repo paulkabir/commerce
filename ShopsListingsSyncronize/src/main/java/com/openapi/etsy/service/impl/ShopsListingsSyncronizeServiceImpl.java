@@ -32,8 +32,8 @@ public class ShopsListingsSyncronizeServiceImpl implements ShopsListingsSyncroni
 
 	private static final Logger log = LoggerFactory.getLogger(ShopsListingsSyncronizeServiceImpl.class);
 
-	@Value("${api.url}")
-	private String apiUrl = null;
+	@Value("${shop.listing.url}")
+	private String shopListingsUrl = null;
 
 	@Value("${file.path}")
 	private String filePath = null;
@@ -59,12 +59,8 @@ public class ShopsListingsSyncronizeServiceImpl implements ShopsListingsSyncroni
 			HttpEntity<String> requestEntity = new HttpEntity<String>(headers);
 			InlineResponse200 inlineResponse200 = new InlineResponse200();
 			for (String shopId : shopIds) {
-
-				ShopResponse response = restTemplate
-						.exchange(String.format(apiUrl, shopId), HttpMethod.GET, requestEntity, ShopResponse.class)
-						.getBody();
-
-				InlineResponse200Result response200Result = this.syncShopsDetails(response.getResults(), shopId);
+				ShopResponse response = restTemplate.exchange(String.format(shopListingsUrl, shopId), HttpMethod.GET, requestEntity, ShopResponse.class).getBody();
+				InlineResponse200Result response200Result = syncShopsDetails(response.getResults(), shopId);
 				inlineResponse200.addResult(response200Result);
 
 				responseEntity = new ResponseEntity<InlineResponse200>(inlineResponse200, HttpStatus.OK);
@@ -88,32 +84,31 @@ public class ShopsListingsSyncronizeServiceImpl implements ShopsListingsSyncroni
 
 		Path path = Paths.get(fileName);
 
-		boolean isfileExisted = Files.exists(path);
-		List<String> newListings = listings.stream()
+		List<String> presentListings = listings.stream()
 				.map(listing -> listing.getListing_id().toString() + " " + listing.getTitle())
 				.collect(Collectors.toList());
 
+		boolean isfileExisted = Files.exists(path);
 		if (!isfileExisted) {
-			for (Listing listing : listings) {
-				result.addListing(listing.getListing_id().toString() + " " + listing.getTitle());
-			}
 			try {
 				Files.createDirectories(path.getParent());
 				Files.createFile(path);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
+			result.setAddedLisitngs(presentListings);
+
 		} else {
 			List<String> existingListings = Files.readAllLines(Paths.get(fileName));
-			List<String> newlyAdded = new ArrayList<>(newListings);
+			List<String> newlyAdded = new ArrayList<>(presentListings);
 			newlyAdded.removeAll(existingListings);
 			List<String> removedListings = new ArrayList<>(existingListings);
-			removedListings.removeAll(newListings);
+			removedListings.removeAll(presentListings);
 			result.setAddedLisitngs(newlyAdded);
 			result.setRemovedListings(removedListings);
 
 		}
-		Files.write(path, newListings);
+		Files.write(path, presentListings);
 
 		return result;
 	}
